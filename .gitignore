@@ -1,3 +1,6 @@
+# I won't share my secrets
+secrets.*
+
 # Compiled Lua sources
 luac.out
 
