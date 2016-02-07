@@ -46,11 +46,13 @@ A request containing these parameters would slowly accelerate while steering lef
 
 
 ## TODO:
-* Write better docs
-* Create a more flexible web server
-* Migrate to a proper Json-POST based RESTful service
-* Support better control for both axis
-* Add touch controls to the website for use in smarthpones
-* Support some network discovery
-* configuration via a smartphone, and maybe a mic
-* add some sort of auth
+- [*] Write better docs
+- [*] Create a more flexible web server
+- [*] Migrate to a proper Json-POST based RESTful service
+- [*] Support better control for both axis
+- [ ] Document the http server and give it away
+- [ ] Add touch controls to the website for use in smarthpones
+- [ ] Get more resilient (aka, test with a monkey)
+- [ ] Support some network discovery
+- [ ] configuration via a smartphone, and maybe a mic
+- [ ] add some sort of auth

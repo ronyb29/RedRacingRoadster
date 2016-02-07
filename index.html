@@ -49,22 +49,27 @@
         circle_element = null;
 
         function request_cb() {
-            x_axis = pressed_keys[RIGHT] ? 1 : pressed_keys[LEFT] ? -1 : 0;
-            z_axis = pressed_keys[UP] ? 1 : pressed_keys[DOWN] ? -1 : 0;
-
-            url = "/move?x=" + x_axis + "&z=" + z_axis;
+            x_axis = pressed_keys[RIGHT] ? 127 : pressed_keys[LEFT] ? -127 : 0;
+            z_axis = pressed_keys[UP] ? 127 : pressed_keys[DOWN] ? -127 : 0;
+            body = JSON.stringify({acceleration: z_axis, steering: x_axis})
 
             req = new XMLHttpRequest();
-            req.open("GET", url, true);
+            start = new Date().getTime();
+
+            req.open("POST", '/move', true);
             req.onreadystatechange = function () {
+                if (req.status == 0){
+                    return;
+                }
                 info_element.innerHTML =
                         "Last req: " + new Date().toISOString() + "<br>" +
-                        "RS: " + req.readyState + "<br>" +
-                        url + "<br>" +
+                        "readyState: " + req.readyState + "<br>" +
                         "Status: " + req.status + "<br>" +
+                        "Response time: " + (new Date().getTime() - start).toString() + "<br>" +
+                        "Body:" + body + "<br>" +
                         "Response text:" + "<div style=\"border: solid black 5px; max-width: 500px;\">" + req.responseText + "</div>";
             };
-            req.send();
+            req.send(body);
         }
 
         function position_circle() {

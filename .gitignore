@@ -1,6 +1,8 @@
 # I won't share my secrets
 secrets.*
 
+.idea/
+
 # Compiled Lua sources
 luac.out
 
