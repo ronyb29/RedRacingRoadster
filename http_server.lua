@@ -13,6 +13,7 @@
 -- * a way to stop
 
 --Route handlers (callbacks) must comply to the F(request, response) signature, where it will set the response data
+local utils = require 'utils'
 local EOL = '\r\n'
 local http_status_codes = {
     [200] = 'OK',
@@ -42,50 +43,41 @@ local http_status_codes = {
     [520] = 'Unknown Error'
 }
 
-local function current_file_size()
-    local current = file.seek('cur', 0)
-    local size = file.seek('end', 0)
-    file.seek('set', current)
-    return size
-end
 
 local function serve_file(filename)
-    --TODO: manage concurrency
     return function(request, response)
-        print('opening file', filename)
-        local rv = file.open(filename, 'r')
-        if not rv then
-            conn:send('HTTP/1.0 404 Not Found\r\n\r\n')
-            return
-        end
+        --TODO: test concurrency, the api supports only one file at a time
+        --todo: test performance hit of closing and opening files this much
+        print('FILE', filename, 'requested')
+        local sent, buffer_size = 0, 0
+        local function serve_file_sending_cb(sock)
+            --print('FILE', filename, 'SENT', sent, 'BUFFSIZE', buffer_size)
+            sent = sent + buffer_size
 
-        print('reading', filename)
-        local function sent_cb(connection)
+            file.open(filename, 'r')
+            file.seek('set', sent)
+
             local content = file.read(1024)
-            print('read: ', #content)
-            if #content == 1024 then
-                print('read: ', #content)
-                connection:send(content, sent_cb)
+            file.close()
+
+            buffer_size = #content
+            if buffer_size == 1024 then
+                sock:send(content, serve_file_sending_cb)
             else
-                connection:send(content,
-                    function(conne)
-                        file:close()
-                        print('file closed')
-                        conne:close()
-                        print('conn closed')
-                    end)
+                sock:send(content, sock.close)
+                print('FILE', filename, 'ENDING')
             end
         end
 
-        response.sock:send('HTTP/1.0 200 OK\r\nContent-Length: ' .. current_file_size() .. '\r\n\r\n', sent_cb)
-
-        print('file queued:' .. filename)
+        response.headers['Content-Lenght'] = file.list()[filename]
+        response.sock:send(response:render_header(), serve_file_sending_cb)
         return nil
     end
 end
 
 
 local function parse_params(raw_params)
+    --todo: optimize Regex
     local response = {}
     for kvp in string.gmatch(raw_params, "[^&]+") do
         for k, v in string.gmatch(kvp, '(%S+)=(%S+)') do
@@ -101,13 +93,13 @@ local function parse_params(raw_params)
 end
 
 local function parse_headers(raw_headers)
+    --todo: optimize Regex
     local response = {}
     for kvp in string.gmatch(raw_headers, "[^\n\r]+") do
         for k, v in string.gmatch(kvp, '(%S+): ([%S ]+)') do
             response[k] = v
         end
     end
-
     return response
 end
 
@@ -116,26 +108,49 @@ local function parse_request(payload)
     request.method, request.url, raw_params, request.http_ver, raw_headers, request.body = string.match(payload, '(%S*) (/[%l%u]*)%??(%S*) (%S*)[\r\n]([%S* \r\n]+)[\r\n][\r\n](.*)')
     request.params = parse_params(raw_params)
     request.headers = parse_headers(raw_headers)
-
+    print('REQUEST')
+    utils.print_table(request)
     return request
 end
 
+local function render_header(response)
+    local code, message = response.code or 200, response.message or http_status_codes[response.code] or 'Uknown code'
+    print(code, message)
+    local raw_response = response.http_ver or 'HTTP/1.1' .. ' ' .. code .. ' ' .. message .. EOL
+    if response.body then
+        response.headers['Content-Lenght'] = response.headers['Content-Lenght'] or #response.body
+    end
+    if response.headers then
+        for k, v in pairs(response.headers) do
+            raw_response = raw_response .. k .. ': ' .. tostring(v) .. EOL
+        end
+    end
+    return raw_response .. EOL
+end
 
 local function send_response(response)
-    response.headers['Content-Lenght'] = response.headers['Content-Lenght'] or #response.body
-    --response.headers['Access-Control-Allow-Origin'] = response.headers['Access-Control-Allow-Origin'] or '*'
-    local raw_response = response.http_ver .. ' ' .. response.code .. ' ' .. response.message .. EOL
-    for k, v in pairs(response.headers) do
-        raw_response = raw_response .. k .. tostring(v) .. EOL
-    end
+    response.sock:send(response:render_header() .. response.body, function(conn) conn:close() end)
+end
 
-    response.sock:send(raw_response .. EOL .. response.body, function(conn) conn:close() end)
+local function solve_route(routes, url, method)
+    local routed_function
+    if routes[url] then
+        if routes[url][method] then
+            routed_function = routes[url][method]
+        else
+            return function(request, response) response.code = 405 end
+        end
+    else
+        if file.list()[url] then
+            routed_function = serve_file(url)
+        end
+    end
+    return routed_function
 end
 
 local function http_server_cb(routes)
     return function(conn)
         conn:on('receive', function(conn, payload)
-            --print('Payload:', #payload, 'mem', node.heap())
             if node.heap() < 10000 then
                 conn:close()
                 return
@@ -143,22 +158,29 @@ local function http_server_cb(routes)
 
             local request = parse_request(payload)
             payload = nil --free the original payload after parsing
+            print(request.method, request.url, node.heap())
 
             if request.url == '/' then
                 request.url = '/index.html'
             end
 
-            local response = { http_ver = request.http_ver, code = nil, message = nil, headers = {}, body = nil, sock = conn, send = send_response }
-            --response.code, response.message, response.body = 404, 'not found', 'not found'
-            --print(request.url, request.method)
-            --TODO: if no route is found, redirect to static file
-            local retval = routes[request.url][request.method](request, response)
+            local response = { send = send_response, render_header = render_header, http_ver = request.http_ver, code = nil, message = nil, headers = {}, body = nil, sock = conn }
+            local routed_function = solve_route(routes, request.url, request.method)
+
+            if not routed_function then
+                response.code, response.body = 404, 'Resource "' .. request.url .. '" Not Found'
+                response:send()
+                return
+            end
+
+            local successful, retval = pcall(routed_function, request, response)
+            if not successful then
+                response.code = 520
+            end
 
             if retval then
-                response.code = response.code or 200
-                response.message = response.message or http_status_codes[response.code] or 'Uknown code'
                 response.body = response.body or retval
-                send_response(response)
+                response:send()
             end
         end)
     end
@@ -186,7 +208,12 @@ end
 return {
     create_server = create_server,
     serve_file = serve_file,
+    EOL = EOL,
     testctx = {
-        parse_request = parse_request
+        parse_request = parse_request,
+        parse_params = parse_params,
+        parse_headers = parse_headers,
+        render_header = render_header,
+        solve_route = solve_route
     }
 }

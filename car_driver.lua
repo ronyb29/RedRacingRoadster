@@ -51,15 +51,5 @@ end
 
 move_car(0, 0)
 
-local function move_car_controller(request, response)
-    if not request.body then
-        response.code = 400
-        return "Bad Request"
-    end
-    params = cjson.decode(request.body)
-    move_car(params.steering, params.acceleration)
-    return 'Free mem: ' .. tostring(node.heap())
-end
 
-
-return { move = move_car_controller }
+return { move_car = move_car }
