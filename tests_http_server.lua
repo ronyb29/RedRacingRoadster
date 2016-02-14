@@ -36,7 +36,6 @@ local function header_renderer_test()
     }
     local expected_header = "HTTP/1.1 404 Not Found" .. http.EOL .. 'Content-Lenght: 18' .. http.EOL .. 'x-rony: es gordito' .. http.EOL .. http.EOL
     local actual_header = http.testctx.render_header(request)
-    print(actual_header)
     assert(actual_header == expected_header)
 end
 

@@ -19,13 +19,9 @@ local http_status_codes = {
     [200] = 'OK',
     [201] = 'Created',
     [202] = 'Accepted',
-    [204] = 'No Content',
-    [205] = 'Reset Content',
     [301] = 'Moved Permanently',
     [302] = 'Found',
-    [303] = 'See Other',
     [304] = 'Not Modified',
-    [305] = 'Use Proxy',
     [307] = 'Temporary Redirect',
     [308] = 'Permanent Redirect',
     [400] = 'Bad Request',
@@ -34,24 +30,17 @@ local http_status_codes = {
     [404] = 'Not Found',
     [405] = 'Method Not Allowed',
     [406] = 'Not Acceptable',
-    [429] = 'Too Many Requests',
     [500] = 'Internal Server Error',
     [501] = 'Not Implemented',
-    [503] = 'Service Unavailable',
-    [504] = 'Gateway Timeout',
-    [507] = 'Insufficient Storage',
     [520] = 'Unknown Error'
 }
 
 
 local function serve_file(filename)
     return function(request, response)
-        --TODO: test concurrency, the api supports only one file at a time
-        --todo: test performance hit of closing and opening files this much
-        print('FILE', filename, 'requested')
+
         local sent, buffer_size = 0, 0
         local function serve_file_sending_cb(sock)
-            --print('FILE', filename, 'SENT', sent, 'BUFFSIZE', buffer_size)
             sent = sent + buffer_size
 
             file.open(filename, 'r')
@@ -65,7 +54,6 @@ local function serve_file(filename)
                 sock:send(content, serve_file_sending_cb)
             else
                 sock:send(content, sock.close)
-                print('FILE', filename, 'ENDING')
             end
         end
 
@@ -108,13 +96,12 @@ local function parse_request(payload)
     request.method, request.url, raw_params, request.http_ver, raw_headers, request.body = string.match(payload, '(%S*) (/[%l%u]*)%??(%S*) (%S*)[\r\n]([%S* \r\n]+)[\r\n][\r\n](.*)')
     request.params = parse_params(raw_params)
     request.headers = parse_headers(raw_headers)
-    print('REQUEST')
-    utils.print_table(request)
     return request
 end
 
 local function render_header(response)
-    local code, message = response.code or 200, response.message or http_status_codes[response.code] or 'Uknown code'
+    local code = response.code or 200
+    local message = response.message or http_status_codes[response.code] or 'Uknown code'
     print(code, message)
     local raw_response = response.http_ver or 'HTTP/1.1' .. ' ' .. code .. ' ' .. message .. EOL
     if response.body then
@@ -210,9 +197,9 @@ return {
     serve_file = serve_file,
     EOL = EOL,
     testctx = {
-        parse_request = parse_request,
         parse_params = parse_params,
         parse_headers = parse_headers,
+        parse_request = parse_request,
         render_header = render_header,
         solve_route = solve_route
     }

@@ -1,7 +1,7 @@
 local driver = require 'car_driver'
 local http = require 'http_server'
 
-local errstr = "request mut contain acceleration and steering params in json body"
+local errstr = "request must contain acceleration and steering params in json body"
 local function move_car_controller(request, response)
     if not request.body then
         response.code = 400

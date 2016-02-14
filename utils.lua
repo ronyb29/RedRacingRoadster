@@ -54,8 +54,15 @@ local function deep_compare(t1, t2, ignore_mt)
     return true
 end
 
+local function timeit(f)
+    local star = tmr.now()
+    f()
+    return tmr.now() - start
+end
+
 
 return {
     print_table = print_table,
-    deep_compare = deep_compare
+    deep_compare = deep_compare,
+    timeit = timeit
 }
