@@ -1,98 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <title>Red Racing Roadster</title>
     <meta charset="UTF-8">
-    <title>Carrito rojo de carreras</title>
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <script src="virtualjoystick.js" type="text/javascript"></script>
+
     <style type="text/css">
+        html {
+            height: 100%;
+        }
+
+        body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            padding: 0;
+            margin: 0;
+        }
+
         #params {
             color: #fff;
         }
 
         .circle {
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
+            width: 55px;
+            height: 55px;
             background-color: red;
-            margin: 25px;
+            margin: 100px;
         }
 
         .movement_canvas {
             border: solid darkred 1px;
-            width: 100px;
-            height: 100px;
+            width: 256px;
+            height: 256px;
         }
     </style>
 
+
     <script type="text/javascript">
-        LEFT = 37;
-        UP = 38;
-        RIGHT = 39;
-        DOWN = 40;
-        pressed_keys = {LEFT: 0, UP: 0, DOWN: 0, RIGHT: 0};
-
-        function keydown(event) {
-            if (~event.keyCode in pressed_keys)
-                return;
-            pressed_keys[event.keyCode] = 1;
-            position_circle();
-        }
-
-        function keyup(event) {
-            if (~event.keyCode in pressed_keys)
-                return;
-            pressed_keys[event.keyCode] = 0;
-            position_circle();
-        }
-
         info_element = null;
         params_element = null;
         circle_element = null;
+        joystick_output = null;
+        joystick = null;
 
-        function request_cb() {
-            x_axis = pressed_keys[RIGHT] ? 127 : pressed_keys[LEFT] ? -127 : 0;
-            z_axis = pressed_keys[UP] ? 127 : pressed_keys[DOWN] ? -127 : 0;
-            body = JSON.stringify({acceleration: z_axis, steering: x_axis})
+        function position_circle(acceleration, steering) {
+            circle_element.style.marginTop = (acceleration + 100) + "px";
+            circle_element.style.marginLeft = (steering + 100) + "px";
+        }
 
+        function move_car(acceleration, steering) {
             req = new XMLHttpRequest();
-            start = new Date().getTime();
+            req.open("POST", 'move', true);
 
-            req.open("POST", '/move', true);
+            start = null;
             req.onreadystatechange = function () {
-                if (req.status == 0) {
-                    return;
-                }
+                if (req.status === 0) return;
+                position_circle(acceleration, steering);
                 info_element.innerHTML =
                         "Last req: " + new Date().toISOString() + "<br>" +
                         "readyState: " + req.readyState + "<br>" +
                         "Status: " + req.status + "<br>" +
-                        "Response time: " + (new Date().getTime() - start).toString() + "<br>" +
-                        "Body:" + body + "<br>" +
+                        "Response time: " + (new Date().getTime() - start) + ' ms' + "<br>" +
                         "Response text:" + "<div style=\"border: solid black 5px; max-width: 500px;\">" + req.responseText + "</div>";
             };
-            req.send(body);
+            start = new Date().getTime();
+            req.send(JSON.stringify({acceleration: acceleration, steering: steering}));
         }
 
-        function position_circle() {
-            z_axis = pressed_keys[UP] ? 1 : pressed_keys[DOWN] ? -1 : 0;
-            circle_element.style.marginTop = (25 - 25 * z_axis) + "px";
+        function clamp_value(min, val, max) {
+            return (val < min) ? min : (val > max) ? max : val;
+        }
 
-            x_axis = pressed_keys[RIGHT] ? 1 : pressed_keys[LEFT] ? -1 : 0;
-            circle_element.style.marginLeft = (25 + 25 * x_axis) + "px";
-            params_element.innerHTML = "X: " + x_axis + " Z: " + z_axis;
-            request_cb();
+        var last_val = {acceleration: 0, steering: 0};
+        function joystick_change_cb() {
+            function clamp_to_movement(val) {
+                return clamp_value(-127, val, 127);
+            }
+
+            var steering = clamp_to_movement(joystick.deltaX());
+            var acceleration = clamp_to_movement(joystick.deltaY());
+
+            if (Math.abs(last_val.steering - steering) < 15 && Math.abs(last_val.acceleration - acceleration) < 15)
+                return;
+            last_val = {acceleration: acceleration, steering: steering};
+            move_car(acceleration, steering);
+
+
+            joystick_output.innerHTML = '<b>Result:</b> '
+                    + ' dx:' + joystick.deltaX()
+                    + ' dy:' + joystick.deltaY()
+                    + (joystick.right() ? ' right' : '')
+                    + (joystick.up() ? ' up' : '')
+                    + (joystick.left() ? ' left' : '')
+                    + (joystick.down() ? ' down' : '')
+        }
+
+        function load_joystick() {
+            console.log("touchscreen is", VirtualJoystick.touchScreenAvailable() ? "available" : "not available");
+            console.log("mouse support enabled");
+
+            joystick = new VirtualJoystick({
+                mouseSupport: true,
+                container: document.body,
+                stickRadius: 127,
+                strokeStyle: "black"
+            });
+
+            function on_down() {
+                console.log('down');
+                joystick_change_cb();
+            }
+
+            function on_move() {
+                console.log("moved");
+                joystick_change_cb();
+            }
+
+            function on_up() {
+                console.log('up');
+                joystick_change_cb();
+            }
+
+            joystick.addEventListener('touchStart', on_down);
+            joystick.addEventListener('touchmove', on_move);
+            joystick.addEventListener('touchEnd', on_up);
+            joystick.addEventListener('mouseDown', on_down);
+            joystick.addEventListener('mouseMove', on_move);
+            joystick.addEventListener('mouseUp', on_up);
         }
 
         window.onload = function () {
             info_element = document.getElementById("info");
             params_element = document.getElementById("params");
             circle_element = document.getElementsByClassName("circle")[0];
-        };
+            joystick_output = document.getElementById("result");
+
+            load_joystick();
+        }
     </script>
 </head>
-<body onkeydown="keydown(event)" onkeyup="keyup(event)">
+
+<body>
+Drag on the screen to contol the car
+<div id="container"></div>
 <div class="movement_canvas">
     <div class="circle"></div>
 </div>
+
+<span id="result"></span>
 <span id="params"></span>
 <br/>
 <span id="info"></span>

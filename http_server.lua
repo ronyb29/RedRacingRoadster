@@ -17,6 +17,7 @@ local utils = require 'utils'
 local EOL = '\r\n'
 local http_status_codes = {
     [200] = 'OK',
+    ["200"] = 'OK',
     [201] = 'Created',
     [202] = 'Accepted',
     [301] = 'Moved Permanently',
@@ -58,6 +59,7 @@ local function serve_file(filename)
         end
 
         response.headers['Content-Lenght'] = file.list()[filename]
+        response.code = 200
         response.sock:send(response:render_header(), serve_file_sending_cb)
         return nil
     end
@@ -93,7 +95,7 @@ end
 
 local function parse_request(payload)
     local request, raw_params, raw_headers = {}, nil, nil
-    request.method, request.url, raw_params, request.http_ver, raw_headers, request.body = string.match(payload, '(%S*) (/[%l%u]*)%??(%S*) (%S*)[\r\n]([%S* \r\n]+)[\r\n][\r\n](.*)')
+    request.method, request.url, raw_params, request.http_ver, raw_headers, request.body = string.match(payload, '(%S*) (/[%l%u.]*)%??(%S*) (%S*)[\r\n]([%S* \r\n]+)[\r\n][\r\n](.*)')
     request.params = parse_params(raw_params)
     request.headers = parse_headers(raw_headers)
     return request
@@ -101,9 +103,9 @@ end
 
 local function render_header(response)
     local code = response.code or 200
-    local message = response.message or http_status_codes[response.code] or 'Uknown code'
-    print(code, message)
-    local raw_response = response.http_ver or 'HTTP/1.1' .. ' ' .. code .. ' ' .. message .. EOL
+    local message = response.message or http_status_codes[response.code]
+    message = message or 'unknown code'
+    local raw_response = (response.http_ver or 'HTTP/1.1') .. ' ' .. code .. ' ' .. message .. EOL
     if response.body then
         response.headers['Content-Lenght'] = response.headers['Content-Lenght'] or #response.body
     end
@@ -128,8 +130,9 @@ local function solve_route(routes, url, method)
             return function(request, response) response.code = 405 end
         end
     else
-        if file.list()[url] then
-            routed_function = serve_file(url)
+        local file_name = string.match(url, '/(%S+)')
+        if file.list()[file_name] then
+            routed_function = serve_file(file_name)
         end
     end
     return routed_function

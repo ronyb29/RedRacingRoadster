@@ -20,7 +20,7 @@ pwm.setup(x_backward_pin, PWM_FRECUENCY, 0)
 pwm.setup(z_forward_pin, PWM_FRECUENCY, 0)
 pwm.setup(z_backward_pin, PWM_FRECUENCY, 0)
 
-local function move_car(x, z)
+local function move_car(z, x)
     --todo use bit and to clamp values to 1 byte
     if x >= 1 then
         pwm.stop(x_forward_pin)
