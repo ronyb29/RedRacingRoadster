@@ -56,3 +56,4 @@ A request containing these parameters would slowly accelerate while steering lef
 - [ ] Support some network discovery
 - [ ] configuration via a smartphone, and maybe a mic
 - [ ] add some sort of auth
+- [ ] save AP list in json file

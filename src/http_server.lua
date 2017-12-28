@@ -17,7 +17,6 @@ local utils = require 'utils'
 local EOL = '\r\n'
 local http_status_codes = {
     [200] = 'OK',
-    ["200"] = 'OK',
     [201] = 'Created',
     [202] = 'Accepted',
     [301] = 'Moved Permanently',

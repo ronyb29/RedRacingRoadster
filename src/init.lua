@@ -10,7 +10,6 @@ pwm.start(WIFI_INDICATOR_PIN)
 wifi.setphymode(wifi.PHYMODE_B)
 wifi.setmode(wifi.STATION)
 
-
 --wifi.ap.config({ssid='RedRacingRoadster',pwd='redracingroadster'})
 --print('wifi AP IP', wifi.ap.getip())
 --dofile('tests_http_server.lua')
